@@ -1,31 +1,26 @@
-# detector.py
 import cv2
 import numpy as np
 from deepface import DeepFace
 from typing import Tuple, Dict
 
-# Load Haarcascade face detector
+# Loading Haarcascade face detector
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 
-# detector.py
-
+# For realtime-webcam emotion detection
 def analyze_emotion(frame: np.ndarray, frame_count: int, last_label: str = "Waiting...") -> Tuple[np.ndarray, str]:
-    """
-    For realtime webcam:
-    - Detects faces with Haar Cascade
-    - Runs DeepFace every 5th frame
-    - Draws bounding boxes + labels
-    - Returns (annotated_frame, label)
-    """
+
     if frame is None or frame.size == 0:
         return frame, "No frame"
 
+    # Resizing input to fixed size (640x480) for consistency and efficient memory utilization
     resized = cv2.resize(frame, (640, 480))
     gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+    # Detect faces in frame
     faces = face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5)
 
     label = last_label
 
+    # Running deepface for every 5th frame for efficient cpu utilization
     if frame_count % 5 == 0:
         try:
             result = DeepFace.analyze(
@@ -40,10 +35,15 @@ def analyze_emotion(frame: np.ndarray, frame_count: int, last_label: str = "Wait
             for (x, y, w, h) in faces:
                 for face in results:
                     is_real = face.get("is_real", True)
+
+                    # Use detected emotion or mark as "Spoof Detected!"
+
                     emotion = face.get("dominant_emotion", "Unknown") if is_real else "Spoof Detected!"
                     label = emotion
 
                     color = (0, 255, 0) if is_real else (0, 0, 255)
+
+                    # Drawing bounding box and label
                     cv2.rectangle(resized, (x, y), (x + w, y + h), color, 2)
                     cv2.putText(resized, emotion, (x, y - 10),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
@@ -55,6 +55,9 @@ def analyze_emotion(frame: np.ndarray, frame_count: int, last_label: str = "Wait
             color = (0,0,255)
         else:
             color = (0,255,0)
+
+        # Drawing bounding box with last label
+
         for (x, y, w, h) in faces:
             cv2.rectangle(resized, (x, y), (x + w, y + h), color, 2)
             cv2.putText(resized, label, (x, y - 10),
@@ -65,11 +68,7 @@ def analyze_emotion(frame: np.ndarray, frame_count: int, last_label: str = "Wait
 
 
 def analyze_image(bgr_image: np.ndarray) -> Tuple[np.ndarray, Dict[str, str]]:
-    """
-    Analyze a single uploaded image:
-    - Haar Cascade for bounding box
-    - DeepFace for emotion (NO anti-spoofing here)
-    """
+
     if bgr_image is None or bgr_image.size == 0:
         raise ValueError("Empty image")
 
