@@ -1,4 +1,3 @@
-# app.py
 import av
 import cv2
 import numpy as np
@@ -6,47 +5,45 @@ import streamlit as st
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
 from detector import analyze_emotion, analyze_image
 
-
+# Webapp title
 st.set_page_config(page_title="Emotion Detection", layout="centered")
-st.title("🎭 Emotion Detection – Image & Realtime (with Anti-Spoofing)")
+
+st.title("Emotion Detection - Image & Realtime (with Anti-Spoofing)")
+
+
+# Creating two tabs (Webcam mode & Image upload mode)
 
 tabs = st.tabs(["🎥 Webcam (Live)", "📷 Upload Image"])
 
-# --------------------- Tab 1: Image Upload ---------------------
-with tabs[1]:
-    st.subheader("Upload an image")
-    file = st.file_uploader("Choose an image file", type=["jpg", "jpeg", "png", "webp"])
-    if file is not None:
-        try:
-            bytes_data = file.read()
-            img_array = np.frombuffer(bytes_data, np.uint8)
-            bgr = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-            if bgr is None:
-                st.error("Could not read the image. Please try a different file.")
-            else:
-                annotated, summary = analyze_image(bgr)
-                rgb = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
-                st.image(rgb, caption="Result", use_container_width=True)
-                st.json(summary)
-        except Exception as e:
-            st.error(f"Processing error: {str(e)}")
 
-# --------------------- Tab 2: Realtime Webcam ---------------------
+# --------------------- Tab 1: Realtime Webcam ---------------------
+
 with tabs[0]:
     st.subheader("Realtime detection using DeepFace with anti-spoofing")
 
+    # Defining a custom processor class to handle video frames
+
     class EmotionProcessor(VideoProcessorBase):
         def __init__(self):
+
+            # To keep track of frames and last label
+
             self.frame_count = 0
             self.label = "Initializing..."
 
         def recv(self, frame):
+
             try:
+                # Converting video frames to numpy array
+
                 img = frame.to_ndarray(format="bgr24")
                 self.frame_count += 1
 
-                # DeepFace-based anti-spoofing + emotion
+                # DeepFace-based anti-spoofing + emotion detection
                 annotated, self.label = analyze_emotion(img, self.frame_count, self.label)
+
+                # Converting numpy array back to video frame
+
                 return av.VideoFrame.from_ndarray(annotated, format="bgr24")
 
             except Exception as e:
@@ -72,9 +69,33 @@ with tabs[0]:
         }
     )
 
+    # Starting real-time webcam streaming inside Streamlit
     webrtc_streamer(
         key="emotion-detection",
         video_processor_factory=EmotionProcessor,
         rtc_configuration=RTC_CONFIGURATION,
         media_stream_constraints={"video": True, "audio": False},
     )
+
+# --------------------- Tab 2: Image Upload ---------------------
+
+with tabs[1]:
+    st.subheader("Upload an image")
+    # Image upload from user
+
+    file = st.file_uploader("Choose an image file", type=["jpg", "jpeg", "png", "webp"])
+    if file is not None:
+        try:
+            # Convert uploaded file (bytes) into numpy array
+            bytes_data = file.read()
+            img_array = np.frombuffer(bytes_data, np.uint8)
+            bgr = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+            if bgr is None:
+                st.error("Could not read the image. Please try a different file.")
+            else:
+                annotated, summary = analyze_image(bgr)
+                rgb = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
+                st.image(rgb, caption="Result", use_container_width=True)
+                st.json(summary)
+        except Exception as e:
+            st.error(f"Processing error: {str(e)}")
