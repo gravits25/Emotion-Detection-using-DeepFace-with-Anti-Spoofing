@@ -25,3 +25,41 @@ The system:
 ---
 
 ## 📂 Project Structure
+📁 Emotion-Detection-Capstone
+│── app.py # Streamlit webapp (UI + Integration)
+│── detector.py # Core detection & emotion analysis logic
+│── requirements.txt # Project dependencies
+
+
+---
+
+## 🎯 Features
+✅ Real-time emotion detection from webcam  
+✅ Spoof detection (only real faces accepted in webcam mode)  
+✅ Image upload support without spoof-check  
+✅ Bounding box detection using Haarcascade  
+✅ Optimized processing (frame skipping + error handling)  
+✅ Streamlit-based user-friendly web interface  
+
+---
+
+## ⚙️ How It Works
+1. **Face Detection** → Haarcascade locates faces.  
+2. **Emotion Analysis** → DeepFace predicts emotions.  
+3. **Anti-Spoofing** → Enabled only in webcam mode.  
+4. **UI** → Streamlit provides two tabs:  
+   - **🎥 Webcam (Live)** → Real-time detection with spoof-check.  
+   - **📷 Image Upload** → Emotion detection for uploaded photos.  
+
+---
+
+## 🚀 Setup & Run
+
+### 1️⃣ Install dependencies
+pip install -r requirements.txt
+
+### 2️⃣ Run locally
+streamlit run app.py
+
+### 🌐 Streamlit App Link
+https://emotion-detection-using-deepface-with-anti-spoofing-a6mbcfnr8x.streamlit.app/
