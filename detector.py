@@ -12,8 +12,8 @@ def analyze_emotion(frame: np.ndarray, frame_count: int, last_label: str = "Wait
     if frame is None or frame.size == 0:
         return frame, "No frame"
 
-    # Resizing input to fixed size (640x480) for consistency and efficient memory utilization
-    resized = cv2.resize(frame, (640, 480))
+    # Resizing input to fixed size (320x240) for consistency and efficient memory utilization
+    resized = cv2.resize(frame, (320, 240))
     gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
     # Detect faces in frame
     faces = face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5)
