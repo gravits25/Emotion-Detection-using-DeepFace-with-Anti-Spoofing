@@ -1,4 +1,4 @@
-# Emotion Detection from Faces (Capstone Project)
+# Emotion Detection from Faces
 
 ## 📌 Overview
 This project implements a **real-time emotion detection system** using **DeepFace** and **OpenCV**, with a **Streamlit web application** for interaction.  
