@@ -14,13 +14,13 @@ The system:
 ---
 
 ## 🛠️ Tech Stack
-- **Language**: Python 3.8+  
+- **Language**: Python 3.10.9 (I have used)
 - **Libraries**:
-  - [DeepFace](https://github.com/serengil/deepface) → Emotion recognition + anti-spoofing  
+  - DeepFace → Emotion recognition + anti-spoofing  
   - OpenCV → Haarcascade face detection + bounding boxes  
   - Streamlit → Web UI  
   - streamlit-webrtc → Real-time webcam integration  
-  - NumPy, Pillow → Image handling  
+  - NumPy → Image handling  
 
 ---
 
