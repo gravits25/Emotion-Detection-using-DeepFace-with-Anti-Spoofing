@@ -1,101 +1,118 @@
-import av
 import cv2
 import numpy as np
+import re
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
-from detector import analyze_emotion, analyze_image
+from deepface import DeepFace
+from typing import Tuple, Dict
 
-# Webapp title
-st.set_page_config(page_title="Emotion Detection", layout="centered")
+# ---------------- Device Type Detection ---------------- #
+def get_device_type() -> str:
+    """
+    Detects if user is on mobile or desktop using Streamlit's user-agent.
+    """
+    try:
+        ua = st.session_state.get("user_agent", "")
+        if not ua:
+            # fallback: request user-agent from JS
+            st.session_state.user_agent = st.experimental_user["browser"]["user_agent"]
+            ua = st.session_state.user_agent
 
-st.title("Emotion Detection - Image & Realtime (with Anti-Spoofing)")
+        # Simple regex check
+        if re.search("Mobi|Android|iPhone", ua, re.IGNORECASE):
+            return "mobile"
+        else:
+            return "desktop"
+    except Exception:
+        return "desktop"   # default fallback
 
 
-# Creating two tabs (Webcam mode & Image upload mode)
+# ---------------- Haarcascade Detector ---------------- #
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 
-tabs = st.tabs(["🎥 Webcam (Live)", "📷 Upload Image"])
 
+# ---------------- Emotion Analysis ---------------- #
+def analyze_emotion(frame: np.ndarray, frame_count: int, last_label: str = "Waiting...") -> Tuple[np.ndarray, str]:
+    if frame is None or frame.size == 0:
+        return frame, "No frame"
 
-# --------------------- Tab 1: Realtime Webcam ---------------------
+    # Choose resolution based on device type
+    device_type = get_device_type()
+    target_size = (480, 640) if device_type == "mobile" else (640, 480)
+    resized = cv2.resize(frame, target_size)
 
-with tabs[0]:
-    st.subheader("Realtime detection using DeepFace with anti-spoofing")
+    gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5)
 
-    # Defining a custom processor class to handle video frames
+    label = last_label
 
-    class EmotionProcessor(VideoProcessorBase):
-        def __init__(self):
-
-            # To keep track of frames and last label
-
-            self.frame_count = 0
-            self.label = "Initializing..."
-
-        def recv(self, frame):
-
-            try:
-                # Converting video frames to numpy array
-
-                img = frame.to_ndarray(format="bgr24")
-                self.frame_count += 1
-
-                # DeepFace-based anti-spoofing + emotion detection
-                annotated, self.label = analyze_emotion(img, self.frame_count, self.label)
-
-                # Converting numpy array back to video frame
-
-                return av.VideoFrame.from_ndarray(annotated, format="bgr24")
-
-            except Exception as e:
-                img = frame.to_ndarray(format="bgr24")
-                cv2.putText(img, f"Err: {str(e)}", (10, 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2, cv2.LINE_AA)
-                return av.VideoFrame.from_ndarray(img, format="bgr24")
-
-    RTC_CONFIGURATION = RTCConfiguration(
-        {
-            "iceServers": [
-                {"urls": ["stun:stun.l.google.com:19302"]},
-                {
-                    "urls": [
-                        "turn:openrelay.metered.ca:80",
-                        "turn:openrelay.metered.ca:443",
-                        "turn:openrelay.metered.ca:443?transport=tcp",
-                    ],
-                    "username": "openrelayproject",
-                    "credential": "openrelayproject",
-                },
-            ]
-        }
-    )
-
-    # Starting real-time webcam streaming inside Streamlit
-    webrtc_streamer(
-        key="emotion-detection",
-        video_processor_factory=EmotionProcessor,
-        rtc_configuration=RTC_CONFIGURATION,
-        media_stream_constraints={"video": True, "audio": False},
-    )
-
-# --------------------- Tab 2: Image Upload ---------------------
-
-with tabs[1]:
-    st.subheader("Upload an image")
-    # Image upload from user
-
-    file = st.file_uploader("Choose an image file", type=["jpg", "jpeg", "png", "webp"])
-    if file is not None:
+    # Run DeepFace only every 5th frame
+    if frame_count % 5 == 0:
         try:
-            # Convert uploaded file (bytes) into numpy array
-            bytes_data = file.read()
-            img_array = np.frombuffer(bytes_data, np.uint8)
-            bgr = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-            if bgr is None:
-                st.error("Could not read the image. Please try a different file.")
-            else:
-                annotated, summary = analyze_image(bgr)
-                rgb = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
-                st.image(rgb, caption="Result", use_container_width=True)
-                st.json(summary)
+            result = DeepFace.analyze(
+                resized,
+                actions=['emotion'],
+                enforce_detection=False,
+                detector_backend='opencv',
+                anti_spoofing=True
+            )
+            results = result if isinstance(result, list) else [result]
+
+            for (x, y, w, h) in faces:
+                for face in results:
+                    is_real = face.get("is_real", True)
+                    emotion = face.get("dominant_emotion", "Unknown") if is_real else "Spoof Detected!"
+                    label = emotion
+
+                    color = (0, 255, 0) if is_real else (0, 0, 255)
+                    cv2.rectangle(resized, (x, y), (x + w, y + h), color, 2)
+                    cv2.putText(resized, emotion, (x, y - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
         except Exception as e:
-            st.error(f"Processing error: {str(e)}")
+            label = f"{str(e)}"
+    else:
+        color = (0, 0, 255) if label.startswith("S") else (0, 255, 0)
+        for (x, y, w, h) in faces:
+            cv2.rectangle(resized, (x, y), (x + w, y + h), color, 2)
+            cv2.putText(resized, label, (x, y - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+
+    return resized, label
+
+
+# ---------------- Single Image Analysis ---------------- #
+def analyze_image(bgr_image: np.ndarray) -> Tuple[np.ndarray, Dict[str, str]]:
+    if bgr_image is None or bgr_image.size == 0:
+        raise ValueError("Empty image")
+
+    img = bgr_image.copy()
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5)
+
+    try:
+        result = DeepFace.analyze(
+            img,
+            actions=['emotion'],
+            enforce_detection=False,
+            detector_backend='opencv'
+        )
+        results = result if isinstance(result, list) else [result]
+        summary = {}
+
+        for (x, y, w, h) in faces:
+            for face in results:
+                emotion = face.get("dominant_emotion", "Unknown")
+                summary = {"dominant_emotion": emotion}
+                color = (0, 255, 0)
+                cv2.rectangle(img, (x, y), (x + w, y + h), color, 2)
+                cv2.putText(img, emotion, (x, y - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+
+        return img, summary
+
+    except Exception as e:
+        overlay = img.copy()
+        cv2.rectangle(overlay, (5, 5), (485, 40), (0, 0, 255), -1)
+        cv2.addWeighted(overlay, 0.35, img, 0.65, 0, img)
+        cv2.putText(img, f"Error: {str(e)}", (12, 32),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2, cv2.LINE_AA)
+        return img, {"error": str(e)}
